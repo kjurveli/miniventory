@@ -12,6 +12,7 @@ A terminal application for tracking your Warhammer miniatures collection.
 ## Requirements
 
 - Python 3.10+
+- [Rich](https://github.com/Textualize/rich) for terminal formatting
 
 ## Install
 

@@ -1,19 +1,14 @@
 from __future__ import annotations
 
+from miniventory import display, ui
 from miniventory.models import Army, Miniature, PaintStatus, Unit, normalize_tags
 from miniventory.store import CollectionStore
-from miniventory import ui
 
 
 class MenuContext:
     def __init__(self, store: CollectionStore) -> None:
         self.store = store
         self.active_tags: list[str] = []
-
-    def tag_banner(self) -> str:
-        if not self.active_tags:
-            return ""
-        return f"Active tag filter: {', '.join(self.active_tags)}\n"
 
 
 def format_army(store: CollectionStore, army: Army) -> str:
@@ -47,23 +42,8 @@ def format_miniature(store: CollectionStore, miniature: Miniature) -> str:
 
 def show_collection_overview(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print(ctx.tag_banner(), end="")
-    print("Collection Overview")
-    print("===================")
-    print(
-        f"Armies: {len(ctx.store.collection.armies)} | "
-        f"Units: {len(ctx.store.collection.units)} | "
-        f"Miniatures: {len(ctx.store.collection.miniatures)}"
-    )
-    print(f"Unique tags: {', '.join(ctx.store.collection.all_tags()) or '(none)'}")
-
-    if ctx.active_tags:
-        results = ctx.store.filter_by_tags(ctx.active_tags)
-        print("\nFiltered results:")
-        print(f"  Armies: {len(results['armies'])}")
-        print(f"  Units: {len(results['units'])}")
-        print(f"  Miniatures: {len(results['miniatures'])}")
-
+    ui.print_filter_banner(ctx.active_tags)
+    ui.console.print(display.render_overview_panel(ctx.store, ctx.active_tags))
     ui.pause()
 
 
@@ -72,29 +52,25 @@ def show_collection_overview(ctx: MenuContext) -> None:
 
 def list_armies(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print(ctx.tag_banner(), end="")
-    print("Armies")
-    print("======")
+    ui.print_filter_banner(ctx.active_tags)
     armies = ctx.store.list_armies(tags=ctx.active_tags or None)
     if not armies:
-        print("No armies yet.")
+        ui.print_info("No armies yet.")
     else:
-        for army in armies:
-            print(f"  • {format_army(ctx.store, army)}")
+        ui.console.print(display.render_armies_table(ctx.store, armies))
     ui.pause()
 
 
 def add_army(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print("Add Army")
-    print("========")
+    ui.print_panel("Add Army")
     name = ui.prompt_text("Name")
     faction = ui.prompt_optional_text("Faction")
     tags = ui.prompt_tags(current=[])
     notes = ui.prompt_optional_text("Notes")
     army = Army(name=name, faction=faction, tags=tags, notes=notes)
     ctx.store.add_army(army)
-    print(f"\nAdded army: {army.name}")
+    ui.print_success(f"Added army: {army.name}")
     ui.pause()
 
 
@@ -105,14 +81,13 @@ def edit_army(ctx: MenuContext) -> None:
         return
 
     ui.clear_screen()
-    print(f"Edit Army: {army.name}")
-    print("=" * (12 + len(army.name)))
+    ui.print_panel(f"Edit Army: {army.name}")
     army.name = ui.prompt_text("Name", army.name)
     army.faction = ui.prompt_optional_text("Faction", army.faction)
     army.tags = ui.prompt_tags(current=army.tags)
     army.notes = ui.prompt_optional_text("Notes", army.notes)
     ctx.store.update_army(army)
-    print("\nArmy updated.")
+    ui.print_success("Army updated.")
     ui.pause()
 
 
@@ -123,9 +98,9 @@ def delete_army(ctx: MenuContext) -> None:
         return
     if ui.prompt_yes_no(f"Delete '{army.name}' and all its units/miniatures?", False):
         ctx.store.delete_army(army.id)
-        print("Army deleted.")
+        ui.print_success("Army deleted.")
     else:
-        print("Cancelled.")
+        ui.print_warning("Cancelled.")
     ui.pause()
 
 
@@ -146,15 +121,12 @@ def armies_menu(ctx: MenuContext) -> None:
 
 def list_units(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print(ctx.tag_banner(), end="")
-    print("Units")
-    print("=====")
+    ui.print_filter_banner(ctx.active_tags)
     units = ctx.store.list_units(tags=ctx.active_tags or None)
     if not units:
-        print("No units yet.")
+        ui.print_info("No units yet.")
     else:
-        for unit in units:
-            print(f"  • {format_unit(ctx.store, unit)}")
+        ui.console.print(display.render_units_table(ctx.store, units))
     ui.pause()
 
 
@@ -165,14 +137,13 @@ def add_unit(ctx: MenuContext) -> None:
         return
 
     ui.clear_screen()
-    print(f"Add Unit to {army.name}")
-    print("=" * (10 + len(army.name)))
+    ui.print_panel(f"Add Unit to {army.name}")
     name = ui.prompt_text("Name")
     tags = ui.prompt_tags(current=[])
     notes = ui.prompt_optional_text("Notes")
     unit = Unit(name=name, army_id=army.id, tags=tags, notes=notes)
     ctx.store.add_unit(unit)
-    print(f"\nAdded unit: {unit.name}")
+    ui.print_success(f"Added unit: {unit.name}")
     ui.pause()
 
 
@@ -185,14 +156,13 @@ def edit_unit(ctx: MenuContext) -> None:
         return
 
     ui.clear_screen()
-    print(f"Edit Unit: {unit.name}")
-    print("=" * (12 + len(unit.name)))
+    ui.print_panel(f"Edit Unit: {unit.name}")
     unit.name = ui.prompt_text("Name", unit.name)
 
     armies = ctx.store.collection.armies
     current_army = ctx.store.get_army(unit.army_id)
     if armies:
-        print(f"Current army: {current_army.name if current_army else 'unknown'}")
+        ui.print_info(f"Current army: {current_army.name if current_army else 'unknown'}")
         if ui.prompt_yes_no("Change army?", False):
             army = ui.select_from_list("Select army", armies, lambda item: item.name)
             if army is not None:
@@ -201,7 +171,7 @@ def edit_unit(ctx: MenuContext) -> None:
     unit.tags = ui.prompt_tags(current=unit.tags)
     unit.notes = ui.prompt_optional_text("Notes", unit.notes)
     ctx.store.update_unit(unit)
-    print("\nUnit updated.")
+    ui.print_success("Unit updated.")
     ui.pause()
 
 
@@ -214,9 +184,9 @@ def delete_unit(ctx: MenuContext) -> None:
         return
     if ui.prompt_yes_no(f"Delete '{unit.name}' and its miniatures?", False):
         ctx.store.delete_unit(unit.id)
-        print("Unit deleted.")
+        ui.print_success("Unit deleted.")
     else:
-        print("Cancelled.")
+        ui.print_warning("Cancelled.")
     ui.pause()
 
 
@@ -237,15 +207,12 @@ def units_menu(ctx: MenuContext) -> None:
 
 def list_miniatures(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print(ctx.tag_banner(), end="")
-    print("Miniatures")
-    print("==========")
+    ui.print_filter_banner(ctx.active_tags)
     miniatures = ctx.store.list_miniatures(tags=ctx.active_tags or None)
     if not miniatures:
-        print("No miniatures yet.")
+        ui.print_info("No miniatures yet.")
     else:
-        for miniature in miniatures:
-            print(f"  • {format_miniature(ctx.store, miniature)}")
+        ui.console.print(display.render_miniatures_table(ctx.store, miniatures))
     ui.pause()
 
 
@@ -258,8 +225,7 @@ def add_miniature(ctx: MenuContext) -> None:
         return
 
     ui.clear_screen()
-    print(f"Add Miniature to {unit.name}")
-    print("=" * (16 + len(unit.name)))
+    ui.print_panel(f"Add Miniature to {unit.name}")
     name = ui.prompt_text("Name")
     status = ui.prompt_choice("Status", PaintStatus.choices(), PaintStatus.UNBUILT.value)
     tags = ui.prompt_tags(current=[])
@@ -272,7 +238,7 @@ def add_miniature(ctx: MenuContext) -> None:
         notes=notes,
     )
     ctx.store.add_miniature(miniature)
-    print(f"\nAdded miniature: {miniature.name}")
+    ui.print_success(f"Added miniature: {miniature.name}")
     ui.pause()
 
 
@@ -287,14 +253,13 @@ def edit_miniature(ctx: MenuContext) -> None:
         return
 
     ui.clear_screen()
-    print(f"Edit Miniature: {miniature.name}")
-    print("=" * (17 + len(miniature.name)))
+    ui.print_panel(f"Edit Miniature: {miniature.name}")
     miniature.name = ui.prompt_text("Name", miniature.name)
 
     units = ctx.store.collection.units
     current_unit = ctx.store.get_unit(miniature.unit_id)
     if units:
-        print(f"Current unit: {current_unit.name if current_unit else 'unknown'}")
+        ui.print_info(f"Current unit: {current_unit.name if current_unit else 'unknown'}")
         if ui.prompt_yes_no("Change unit?", False):
             unit = ui.select_from_list(
                 "Select unit", units, lambda item: format_unit(ctx.store, item)
@@ -312,7 +277,7 @@ def edit_miniature(ctx: MenuContext) -> None:
     miniature.tags = ui.prompt_tags(current=miniature.tags)
     miniature.notes = ui.prompt_optional_text("Notes", miniature.notes)
     ctx.store.update_miniature(miniature)
-    print("\nMiniature updated.")
+    ui.print_success("Miniature updated.")
     ui.pause()
 
 
@@ -327,9 +292,9 @@ def delete_miniature(ctx: MenuContext) -> None:
         return
     if ui.prompt_yes_no(f"Delete '{miniature.name}'?", False):
         ctx.store.delete_miniature(miniature.id)
-        print("Miniature deleted.")
+        ui.print_success("Miniature deleted.")
     else:
-        print("Cancelled.")
+        ui.print_warning("Cancelled.")
     ui.pause()
 
 
@@ -350,38 +315,37 @@ def miniatures_menu(ctx: MenuContext) -> None:
 
 def set_tag_filter(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print("Set Tag Filter")
-    print("==============")
-    print("Enter tags to filter lists across armies, units, and miniatures.")
-    print("Leave blank to clear the active filter.")
+    ui.print_panel(
+        "Set Tag Filter",
+        "Enter tags to filter lists. Leave blank to clear.",
+    )
     tags = ui.prompt_tags(current=ctx.active_tags)
     ctx.active_tags = normalize_tags(tags)
     if ctx.active_tags:
-        print(f"\nFilter set: {', '.join(ctx.active_tags)}")
+        ui.print_success(f"Filter set: {', '.join(ctx.active_tags)}")
     else:
-        print("\nTag filter cleared.")
+        ui.print_info("Tag filter cleared.")
     ui.pause()
 
 
 def browse_by_tags(ctx: MenuContext) -> None:
     ui.clear_screen()
-    print("Browse by Tags")
-    print("==============")
     all_tags = ctx.store.collection.all_tags()
     if not all_tags:
-        print("No tags in collection yet.")
+        ui.print_panel("Browse by Tags")
+        ui.print_info("No tags in collection yet.")
         ui.pause()
         return
 
-    print("Available tags:")
-    for index, tag in enumerate(all_tags, start=1):
-        print(f"  {index}. {tag}")
-    print("  0. Cancel")
+    ui.print_panel("Browse by Tags", "Select a tag or enter comma-separated tags")
+    ui.print_numbered_list(all_tags, back_label="0. Cancel")
 
     try:
-        selection = input("\nSelect a tag (or enter tags comma-separated): ").strip()
+        selection = ui.console.input(
+            "\nSelect a tag (or enter tags comma-separated): "
+        ).strip()
     except (EOFError, KeyboardInterrupt):
-        print()
+        ui.console.print()
         raise
 
     if selection == "0":
@@ -392,7 +356,7 @@ def browse_by_tags(ctx: MenuContext) -> None:
         if 0 <= index < len(all_tags):
             tags = [all_tags[index]]
         else:
-            print("Invalid selection.")
+            ui.print_warning("Invalid selection.")
             ui.pause()
             return
     else:
@@ -400,30 +364,7 @@ def browse_by_tags(ctx: MenuContext) -> None:
 
     results = ctx.store.filter_by_tags(tags)
     ui.clear_screen()
-    print(f"Results for tags: {', '.join(normalize_tags(tags))}")
-    print("=" * 40)
-
-    print("\nArmies:")
-    if results["armies"]:
-        for army in results["armies"]:
-            print(f"  • {format_army(ctx.store, army)}")
-    else:
-        print("  (none)")
-
-    print("\nUnits:")
-    if results["units"]:
-        for unit in results["units"]:
-            print(f"  • {format_unit(ctx.store, unit)}")
-    else:
-        print("  (none)")
-
-    print("\nMiniatures:")
-    if results["miniatures"]:
-        for miniature in results["miniatures"]:
-            print(f"  • {format_miniature(ctx.store, miniature)}")
-    else:
-        print("  (none)")
-
+    display.render_tag_results(ctx.store, results, normalize_tags(tags))
     ui.pause()
 
 
@@ -440,35 +381,40 @@ def tags_menu(ctx: MenuContext) -> None:
 
 def _clear_tag_filter(ctx: MenuContext) -> None:
     ctx.active_tags = []
-    print("Tag filter cleared.")
+    ui.print_info("Tag filter cleared.")
     ui.pause()
 
 
 def main_menu(ctx: MenuContext) -> None:
     while True:
         ui.clear_screen()
-        print("Miniventory — Warhammer Miniature Tracker")
-        print("=======================================")
-        if ctx.tag_banner():
-            print(ctx.tag_banner(), end="")
-        print(f"Data file: {ctx.store.path}")
-        print(
-            f"Collection: {len(ctx.store.collection.armies)} armies, "
-            f"{len(ctx.store.collection.units)} units, "
-            f"{len(ctx.store.collection.miniatures)} miniatures"
+        ui.print_panel(
+            "Miniventory",
+            "Warhammer Miniature Tracker",
         )
-        print()
-        print("  1. Collection overview")
-        print("  2. Armies")
-        print("  3. Units")
-        print("  4. Miniatures")
-        print("  5. Tags")
-        print("  0. Exit")
+        ui.print_filter_banner(ctx.active_tags)
+        ui.print_info(f"Data file: {ctx.store.path}")
+        ui.console.print(
+            f"Collection: [bold]{len(ctx.store.collection.armies)}[/] armies, "
+            f"[bold]{len(ctx.store.collection.units)}[/] units, "
+            f"[bold]{len(ctx.store.collection.miniatures)}[/] miniatures"
+        )
+        ui.console.print()
+        ui.print_numbered_list(
+            [
+                "Collection overview",
+                "Armies",
+                "Units",
+                "Miniatures",
+                "Tags",
+            ],
+            back_label="0. Exit",
+        )
 
         try:
-            choice = input("\nChoice: ").strip()
+            choice = ui.console.input("\nChoice: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye!")
+            ui.console.print("\nGoodbye!")
             return
 
         actions = {
@@ -479,11 +425,11 @@ def main_menu(ctx: MenuContext) -> None:
             "5": lambda: tags_menu(ctx),
         }
         if choice == "0":
-            print("Goodbye!")
+            ui.console.print("Goodbye!")
             return
         action = actions.get(choice)
         if action:
             action()
         else:
-            print("Invalid choice.")
+            ui.print_warning("Invalid choice.")
             ui.pause()
