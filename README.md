@@ -48,6 +48,21 @@ Army
 
 Deleting an army removes its units and miniatures. Deleting a unit removes its miniatures.
 
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The suite includes unit tests (models, store, display) and integration tests that drive the menu flows with mocked input.
+
+With coverage (requires `pip install coverage` or `pip install -e ".[dev]"`):
+
+```bash
+python3 -m coverage run -m unittest discover -s tests -q
+python3 -m coverage report -m --include="miniventory/*"
+```
+
 ## Navigation
 
 The app uses numbered menus. Press `Ctrl+C` at any prompt to exit.
